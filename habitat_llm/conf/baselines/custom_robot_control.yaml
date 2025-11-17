@@ -1,0 +1,7 @@
+# @package _global_
+
+defaults:
+  - /examples/centralized_full_obs
+  - override /planner@evaluation.planner: custom_control_planner
+  - override /agent@evaluation.agents.agent_0.config: custom_control_robot_agent
+  - _self_

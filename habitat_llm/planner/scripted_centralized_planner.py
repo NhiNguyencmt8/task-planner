@@ -196,36 +196,36 @@ class PropositionResolver:
         self, prop_groups, prop_indices, constraints_agent_assignment, num_agents=2
     ):
         """
-        Given a dag with propositions, assigns propositions to each agent so that the DAG is followed.
-        E.g. if prop_groups is [Rearrange(O1,R1), Rearrange(O2,R2)], [Rearrange(O3,R3)]
-        which means that there should be two rearrange in any order and a third rearrange later,
-        it will do a random assignment such as:
-        {0: [Rearrange(O1,R1), Wait1, Rearrange(O3, R3)], 1: [Rearrange(O2, R2), Wait1]}
-        where Wait is a deadlock. Because we don't use Rearrange actions anymore, this also converts
-        to Nav, Pick, Nav, Place
-        :prop_groups: list of propositions with constraints set by DAG.
-        :prop_indices: for every proposition group what proposition indices are in that group. This is used
-        for temporal constraints
-        :constraints_agent_assignment: for every proposition index, which agents can do them
-        :return: dictionary from agent to skills
+        Modified: All robot actions (agent 0) are appended to human agent's (agent 1) action list.
+        Agent 0's list is only 'Wait' actions.
         """
         agent_actions = {ind: [] for ind in range(num_agents)}
+        robot_actions = []
+        human_actions = []
         for prop_grp_ind, prop_group in enumerate(prop_groups):
             for ind, action in enumerate(prop_group):
                 prop_ind = prop_indices[prop_grp_ind][ind]
                 assigned_agent = self.random.choice(
                     constraints_agent_assignment[prop_ind]
                 )
-
-                if type(action) == list:
-                    agent_actions[assigned_agent] += action
+                # Collect actions for robot and human
+                if assigned_agent == 0:
+                    if type(action) == list:
+                        robot_actions += action
+                    else:
+                        robot_actions.append(action)
                 else:
-                    agent_actions[assigned_agent].append(action)
-
+                    if type(action) == list:
+                        human_actions += action
+                    else:
+                        human_actions.append(action)
+            # Add Wait actions for both agents at the end of each group
             if num_agents > 1:
-                for ind in range(num_agents):
-                    agent_actions[ind].append(f"Wait {prop_grp_ind}")
-
+                robot_actions.append(f"Wait {prop_grp_ind}")
+                human_actions.append(f"Wait {prop_grp_ind}")
+        # Append all robot actions to human actions
+        agent_actions[0] = [f"Wait {i}" for i in range(len(prop_groups))]
+        agent_actions[1] = human_actions + robot_actions
         return agent_actions
 
     def get_list_actions_from_rearrange(
@@ -1196,17 +1196,21 @@ class ScriptedCentralizedPlanner(Planner):
         """
 
         # Advance the plan for any agent that has to switch to next skills
-
         for agent_id in next_skill_agents:
             if next_skill_agents[agent_id] and not self.is_waiting[agent_id]:
                 self.plan_indx[agent_id] += 1
 
-        is_done = [False, False]
+        # Assume agent 0 is robot, agent 1 is human
+        num_agents = len(self.actions_per_agent)
+        is_done = [False] * num_agents
         for agent_id in next_skill_agents:
             curr_step_skill = self.plan_indx[agent_id]
             if curr_step_skill >= len(self.actions_per_agent[agent_id]):
                 self.is_waiting[agent_id] = True
                 is_done[agent_id] = True
+            elif agent_id == 0:
+                # Robot agent: always navigate to human's current object
+                self.is_waiting[agent_id] = False
             elif "Wait" in self.actions_per_agent[agent_id][curr_step_skill]:
                 self.is_waiting[agent_id] = True
 
@@ -1216,21 +1220,38 @@ class ScriptedCentralizedPlanner(Planner):
         is_waiting = np.all(self.is_waiting)
         if is_waiting:
             # All the agents started to wait, means we can unblock
-            self.is_waiting = [False for _ in range(len(self.actions_per_agent))]
+            self.is_waiting = [False for _ in range(num_agents)]
             for agent_id in self.actions_per_agent:
                 self.is_waiting[agent_id] = False
 
-            return self.actions_parser({0: True, 1: True})
+            return self.actions_parser({i: True for i in range(num_agents)})
 
         high_level_actions = {}
         for agent_id in self.actions_per_agent:
-            if self.is_waiting[agent_id]:
+            if agent_id == 0:
+                # Robot agent: always navigate to human's current object
+                # Find human's current object (assume agent 1)
+                human_id = 1
+                human_step_skill = self.plan_indx[human_id]
+                if human_step_skill < len(self.actions_per_agent[human_id]):
+                    human_action = self.actions_per_agent[human_id][human_step_skill]
+                    # Try to extract object from human action tuple or string
+                    if isinstance(human_action, tuple):
+                        obj_name = human_action[1] if len(human_action) > 1 else ""
+                    elif isinstance(human_action, str):
+                        # Try to parse object from string
+                        obj_name = human_action.split()[1] if len(human_action.split()) > 1 else ""
+                    else:
+                        obj_name = ""
+                    high_level_actions[agent_id] = ("Navigate", obj_name, "")
+                else:
+                    high_level_actions[agent_id] = ("Wait", "", "")
+            elif self.is_waiting[agent_id]:
                 high_level_actions[agent_id] = ("Wait", "", "")
             else:
                 curr_step_skill = self.plan_indx[agent_id]
                 agent_action_name = self.actions_per_agent[agent_id][curr_step_skill]
                 high_level_actions[agent_id] = agent_action_name
-
         high_level_actions_str = self.stringify_actions(high_level_actions)
 
         return high_level_actions, high_level_actions_str

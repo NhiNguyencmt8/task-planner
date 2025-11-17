@@ -24,11 +24,16 @@ from typing import Dict
 
 from torch import multiprocessing as mp
 
+import pickle
+import numpy as np
+import matplotlib.pyplot as plt
+
 from habitat_llm.agent.env.evaluation.evaluation_functions import (
     aggregate_measures,
 )
 
 from habitat_llm.utils import cprint, setup_config, fix_config
+from habitat_llm.examples.example_utils import execute_skill
 
 
 from habitat_llm.agent.env import (
@@ -174,7 +179,7 @@ def run_eval(config):
             config=config.habitat.dataset, episodes=episode_subset
         )
 
-    num_episodes = len(dataset.episodes)
+    num_episodes = min(len(dataset.episodes), 10)
     if config.num_proc == 1:
         if config.get("episode_indices", None) is not None:
             if config.get("resume", False):
@@ -331,7 +336,7 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
             str(i): {} for i in range(config.num_runs_per_episode)
         }
 
-        num_episodes = len(env_interface.env.episodes)
+        num_episodes = min(len(env_interface.env.episodes), 10)
         for run_id in range(config.num_runs_per_episode):
             for _ in range(num_episodes):
                 # Get episode id
@@ -341,47 +346,106 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
                 instruction = env_interface.env.env.env._env.current_episode.instruction
                 print("\n\nEpisode", episode_id)
 
+                info = eval_runner.run_instruction(
+                    output_name=f"episode_{episode_id}_{run_id}"
+                )
+
+                info_episode = {
+                    "run_id": run_id,
+                    "episode_id": episode_id,
+                    "instruction": instruction,
+                }
+                stats_keys = {
+                    "task_percent_complete",
+                    "task_state_success",
+                    "sim_step_count",
+                    "replanning_count",
+                    "runtime",
+                }
+
+                # add replanning counts to stats_keys as scalars if replanning_count is a dict
+                if "replanning_count" in info and isinstance(
+                    info["replanning_count"], dict
+                ):
+                    for agent_id, replan_count in info["replanning_count"].items():
+                        stats_keys.add(f"replanning_count_{agent_id}")
+                        info[f"replanning_count_{agent_id}"] = replan_count
+
+                stats_episode = extract_scalars_from_info(
+                    info, ignore_keys=info.keys() - stats_keys
+                )
+                # Save agent positions captured by the evaluation runner for analysis
+
                 try:
-                    info = eval_runner.run_instruction(
-                        output_name=f"episode_{episode_id}_{run_id}"
-                    )
+                    dataset_file = env_interface.conf.habitat.dataset.data_path.split("/")[-1]
+                    plots_dir = os.path.join(config.paths.results_dir, dataset_file, "plots")
+                    os.makedirs(plots_dir, exist_ok=True)
+                    positions = []
+                    # eval_runner.agent_positions is a list of dicts uid->pos
+                    if hasattr(eval_runner, "agent_positions"):
+                        positions = eval_runner.agent_positions.copy()
+                        # print(f"Saved {len(positions)} position frames for episode {episode_id}")
+                    # pickle positions for later aggregation
+                    with open(os.path.join(plots_dir, f"episode_{episode_id}_positions.pkl"), "wb") as pf:
+                        pickle.dump({"positions": positions, "episode_id": episode_id}, pf)
+                except Exception as e:
+                    print(f"Failed to save positions for episode {episode_id}: {e}")
+                stats_episodes[str(run_id)][episode_id] = stats_episode
 
-                    info_episode = {
-                        "run_id": run_id,
-                        "episode_id": episode_id,
-                        "instruction": instruction,
-                    }
-                    stats_keys = {
-                        "task_percent_complete",
-                        "task_state_success",
-                        "sim_step_count",
-                        "replanning_count",
-                        "runtime",
-                    }
+                cprint("\n---------------------------------", "blue")
+                cprint(f"Metrics For Run {run_id} Episode {episode_id}:", "blue")
+                for k, v in stats_episodes[str(run_id)][episode_id].items():
+                    cprint(f"{k}: {v:.3f}", "blue")
+                cprint("\n---------------------------------", "blue")
+                # Log results onto a CSV
+                epi_metrics = stats_episodes[str(run_id)][episode_id] | info_episode
+                if config.evaluation.log_data:
+                    save_success_message(config, env_interface, stats_episode)
+                write_to_csv(config.paths.epi_result_file_path, epi_metrics)
 
-                    # add replanning counts to stats_keys as scalars if replanning_count is a dict
-                    if "replanning_count" in info and isinstance(
-                        info["replanning_count"], dict
-                    ):
-                        for agent_id, replan_count in info["replanning_count"].items():
-                            stats_keys.add(f"replanning_count_{agent_id}")
-                            info[f"replanning_count_{agent_id}"] = replan_count
+                # compute basic intrusion metrics for this episode and save a small JSON/plot
+                try:
+                    # load back positions we just saved
+                    pfile = os.path.join(plots_dir, f"episode_{episode_id}_positions.pkl")
+                    if os.path.isfile(pfile):
+                        with open(pfile, "rb") as pf:
+                            pdata = pickle.load(pf)
+                            positions = pdata.get("positions", [])
 
-                    stats_episode = extract_scalars_from_info(
-                        info, ignore_keys=info.keys() - stats_keys
-                    )
-                    stats_episodes[str(run_id)][episode_id] = stats_episode
-
-                    cprint("\n---------------------------------", "blue")
-                    cprint(f"Metrics For Run {run_id} Episode {episode_id}:", "blue")
-                    for k, v in stats_episodes[str(run_id)][episode_id].items():
-                        cprint(f"{k}: {v:.3f}", "blue")
-                    cprint("\n---------------------------------", "blue")
-                    # Log results onto a CSV
-                    epi_metrics = stats_episodes[str(run_id)][episode_id] | info_episode
-                    if config.evaluation.log_data:
-                        save_success_message(config, env_interface, stats_episode)
-                    write_to_csv(config.paths.epi_result_file_path, epi_metrics)
+                        # Write per-step human/robot positions and task success to CSV
+                        # Find human and robot uids
+                        if positions and len(positions) > 0:
+                            agent_uids = list(positions[0].keys())
+                            # Assume human is uid 1 or min uid, robot is next
+                            human_uid = 1 if 1 in agent_uids else min(agent_uids)
+                            robot_uids = [uid for uid in agent_uids if uid != human_uid]
+                            robot_uid = robot_uids[0] if robot_uids else None
+                            # Get episode metrics
+                            stats = stats_episodes[str(run_id)][episode_id]
+                            task_success = stats.get("task_state_success", None)
+                            task_percent_complete = stats.get("task_percent_complete", None)
+                            runtime = stats.get("runtime", None)
+                            sim_step_count = stats.get("sim_step_count", None)
+                            # Prepare CSV file
+                            csv_path = os.path.join(config.paths.results_dir, "human_with_robot_disturbance_log.csv")
+                            file_exists = os.path.isfile(csv_path)
+                            with open(csv_path, "a", newline="") as csvfile:
+                                writer = csv.DictWriter(csvfile, fieldnames=["episode_id", "step", "human_pos", "robot_pos", "task_success", "task_percent_complete", "runtime", "sim_step_count"])
+                                if not file_exists:
+                                    writer.writeheader()
+                                for step_idx, frame in enumerate(positions):
+                                    human_pos = frame.get(human_uid, None)
+                                    robot_pos = frame.get(robot_uid, None)
+                                    writer.writerow({
+                                        "episode_id": episode_id,
+                                        "step": step_idx,
+                                        "human_pos": human_pos,
+                                        "robot_pos": robot_pos,
+                                        "task_success": task_success,
+                                        "task_percent_complete": task_percent_complete,
+                                        "runtime": runtime,
+                                        "sim_step_count": sim_step_count
+                                    })
                 except Exception as e:
                     # print exception and trace
                     traceback.print_exc()
@@ -437,7 +501,6 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
         # Potentially we may want to send something
 
         conn.close()
-
 
 if __name__ == "__main__":
     cprint(

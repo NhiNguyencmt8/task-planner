@@ -1,0 +1,16 @@
+manual_control:
+  _target_: 'habitat_llm.tools.motor_skills.MotorSkillTool'
+  _recursive_: False
+
+  skill_config:
+    skill:
+      _target_: "habitat_llm.tools.motor_skills.manual_control.ManualControlSkill"
+      _partial_: True
+
+    name: 'ManualControl'
+    description: 'Used for direct control of robot velocities. You can specify forward velocity and turn velocity. Example commands: ManualControl[forward:0.5] to move forward at 0.5 m/s, ManualControl[turn:0.3] to turn at 0.3 rad/s, ManualControl[forward:0.5,turn:0.2] to move forward and turn simultaneously, ManualControl[stop] to stop all motion.'
+    max_skill_steps: 1
+    force_end_on_timeout: True
+    
+    max_forward_velocity: 1.0
+    max_turn_velocity: 1.0

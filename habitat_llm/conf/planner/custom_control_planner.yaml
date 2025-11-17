@@ -1,0 +1,4 @@
+plan_config: "Empty"
+_target_: 'habitat_llm.planner.custom_control_planner.CustomControlPlanner'
+_recursive_: True
+_partial_: True

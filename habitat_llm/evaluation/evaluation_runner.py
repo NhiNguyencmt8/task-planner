@@ -28,7 +28,7 @@ from habitat_llm.planner.planner import Planner
 from habitat_llm.utils import cprint, rollout_print
 from habitat_llm.utils.sim import init_agents
 from habitat_llm.world_model import Entity, WorldGraph
-
+import numpy as np
 
 @attr.s(auto_attribs=True)
 class ActionHistoryElement:
@@ -261,16 +261,30 @@ class EvaluationRunner:
         if agent_uid is not None:
             world_graph = self.env_interface.world_graph[agent_uid]
         else:
-            print(
-                "No agent_uid provided. Code will generate top-down visualization from full-observability perspective"
-            )
+            # print(
+            #     "No agent_uid provided. Code will generate top-down visualization from full-observability perspective"
+            # )
             world_graph = self.env_interface.full_world_graph
-        sim = self.env_interface.sim
-        self.agent_positions.append(
-            sim.agents_mgr[agent_uid].articulated_agent.base_pos
-        )
 
-        self.object_nodes.append(world_graph.get_all_objects())
+        sim = self.env_interface.sim
+
+        # collect positions for all agents available in the sim
+        positions = {}
+        # self.agents is a dict mapping uid -> Agent
+        for uid in self.agents.keys():
+            try:
+                pos = sim.agents_mgr[uid].articulated_agent.base_pos
+                positions[uid] = pos
+            except Exception:
+                # fallback: skip agents without a sim representation
+                continue
+        # print(f"Storing top-down viz data ", positions)
+        self.agent_positions.append(positions)
+        # store a snapshot of object nodes from the selected world graph
+        try:
+            self.object_nodes.append(world_graph.get_all_objects())
+        except Exception:
+            self.object_nodes.append([])
 
     def _log_planner_data(self, planner_infos: List[Dict[str, Any]]) -> None:
         """
@@ -596,6 +610,8 @@ class EvaluationRunner:
 
         # Plan until required
         while not should_end:
+            # Store agent positions for top-down visualization and analysis
+            self._store_for_top_down_viz()
             # Print the llm response
             if (
                 "print" in planner_info
@@ -614,7 +630,6 @@ class EvaluationRunner:
                         observations, planner_info["high_level_actions"]
                     )
 
-            # Get next low level actions
             low_level_actions, planner_info, should_end = self.get_low_level_actions(
                 self.current_instruction, observations, self.env_interface.world_graph
             )
