@@ -564,6 +564,8 @@ class OracleNavSkill(SkillPolicy):
                     dist_to_final_nav_targ < self.dist_thresh
                     and angle_to_obj < self.turn_thresh
                 )
+            
+            # TODO HERE: Put our disturbance cost logic here
 
             if not at_goal:
                 if dist_to_final_nav_targ < self.dist_thresh:
