@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - /examples/centralized_full_obs
+  - override /planner@evaluation.planner: dag_centralized_planner
+  - override /agent@evaluation.agents.agent_0.config: human_aware_nav_agent_no_explore
+habitat:
+  task:
+    lab_sensors:
+      humanoid_detector_sensor:
+        return_image: true
+        is_return_image_bbox: false
+        human_id: 1
