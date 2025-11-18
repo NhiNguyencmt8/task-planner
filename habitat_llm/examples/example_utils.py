@@ -198,8 +198,8 @@ def execute_skill(
         low_level_actions, responses = llm_env.process_high_level_actions(
             high_level_skill_actions, observations
         )
-        print(f"Low level actions reset robot to wait")
-        low_level_actions[0] = np.zeros_like(low_level_actions[0])  # or your "Wait" action
+        # print(f"Low level actions reset robot to wait")
+        # low_level_actions[0] = np.zeros_like(low_level_actions[0])  # or your "Wait" action
 
 
         assert (

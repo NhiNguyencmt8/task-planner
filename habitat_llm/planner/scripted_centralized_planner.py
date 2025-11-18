@@ -208,24 +208,41 @@ class PropositionResolver:
                 assigned_agent = self.random.choice(
                     constraints_agent_assignment[prop_ind]
                 )
-                # Collect actions for robot and human
-                if assigned_agent == 0:
-                    if type(action) == list:
-                        robot_actions += action
-                    else:
-                        robot_actions.append(action)
+                if type(action) == list:
+                    agent_actions[assigned_agent] += action
                 else:
-                    if type(action) == list:
-                        human_actions += action
-                    else:
-                        human_actions.append(action)
-            # Add Wait actions for both agents at the end of each group
+                    agent_actions[assigned_agent].append(action)
+
             if num_agents > 1:
-                robot_actions.append(f"Wait {prop_grp_ind}")
-                human_actions.append(f"Wait {prop_grp_ind}")
-        # Append all robot actions to human actions
-        agent_actions[0] = [f"Wait {i}" for i in range(len(prop_groups))]
-        agent_actions[1] = human_actions + robot_actions
+                for ind in range(num_agents):
+                    agent_actions[ind].append(f"Wait {prop_grp_ind}")
+
+        # TODO: Logic here can comment stuff
+        # for prop_grp_ind, prop_group in enumerate(prop_groups):
+        #     for ind, action in enumerate(prop_group):
+        #         prop_ind = prop_indices[prop_grp_ind][ind]
+        #         assigned_agent = self.random.choice(
+        #             constraints_agent_assignment[prop_ind]
+        #         )
+        #         # Collect actions for robot and human
+        #         if assigned_agent == 0:
+        #             if type(action) == list:
+        #                 robot_actions += action
+        #             else:
+        #                 robot_actions.append(action)
+        #         else:
+        #             if type(action) == list:
+        #                 human_actions += action
+        #             else:
+        #                 human_actions.append(action)
+        #     
+        #     # Add Wait actions for both agents at the end of each group
+        #     # if num_agents > 1:
+        #     #     robot_actions.append(f"Wait {prop_grp_ind}")
+        #     #     human_actions.append(f"Wait {prop_grp_ind}")
+        # # Append all robot actions to human actions
+        # # agent_actions[0] = [f"Wait {i}" for i in range(len(prop_groups))]
+        # # agent_actions[1] = human_actions + robot_actions
         return agent_actions
 
     def get_list_actions_from_rearrange(
