@@ -179,7 +179,7 @@ def run_eval(config):
             config=config.habitat.dataset, episodes=episode_subset
         )
 
-    num_episodes = min(len(dataset.episodes), 10)
+    num_episodes = min(len(dataset.episodes), 8)
     if config.num_proc == 1:
         if config.get("episode_indices", None) is not None:
             if config.get("resume", False):
@@ -336,7 +336,7 @@ def run_planner(config, dataset: CollaborationDatasetV0 = None, conn=None):
             str(i): {} for i in range(config.num_runs_per_episode)
         }
 
-        num_episodes = min(len(env_interface.env.episodes), 10)
+        num_episodes = min(len(env_interface.env.episodes), 8)
         for run_id in range(config.num_runs_per_episode):
             for _ in range(num_episodes):
                 # Get episode id

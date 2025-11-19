@@ -1,0 +1,27 @@
+reactive_nav:
+  _target_                   : 'habitat_llm.tools.motor_skills.MotorSkillTool'
+  _recursive_                : False
+
+  skill_config                :
+    skill                      :
+      _target_                 : "habitat_llm.tools.motor_skills.ReactiveNavSkill"
+      _partial_                : True
+
+    name                       : 'ReactiveNavigate'
+    description                : 'Reactive navigation that avoids nearby humans (robot-only reactive behavior). Example (ReactiveNavigate[counter_22])'
+    max_skill_steps            : 600
+    force_end_on_timeout       : True
+
+    # Navigation params (copied from oracle defaults)
+    dist_thresh                : 0.2
+    turn_thresh                : 0.45
+    forward_velocity           : 10.0
+    turn_velocity              : 10.0
+    sim_freq                   : 120 # Hz
+    enable_backing_up          : False
+    enable_exploration         : False
+
+    # Reactive avoidance parameters (meters)
+    avoidance_distance        : 1.0
+    avoidance_radius          : 1.2
+    avoidance_release_distance: 1.4

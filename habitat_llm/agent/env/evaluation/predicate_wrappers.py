@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import networkx as nx
+import numpy as np
 from habitat.sims.habitat_simulator.sim_utilities import (
     above,
     get_obj_from_handle,
@@ -39,6 +40,18 @@ class SimBasedPredicates:
         sim: CollaborationSim, handle: str
     ) -> Union[ManagedRigidObject, ManagedArticulatedObject]:
         """map handle to object/receptacle as managed by the AOM or ROM."""
+        # Check if this is an agent handle (e.g., "agent_0", "agent_1")
+        if handle.startswith("agent_"):
+            try:
+                agent_id = int(handle.split("_")[1])
+                # Return the articulated agent instance
+                return sim.agents_mgr[agent_id].articulated_agent
+            except (IndexError, KeyError, ValueError) as e:
+                raise ValueError(
+                    f"Agent handle `{handle}` is invalid or agent not found. Error: {e}"
+                )
+        
+        # Original code for objects
         sim_instance = get_obj_from_handle(sim, handle)
         if sim_instance is None:
             raise ValueError(
@@ -317,13 +330,41 @@ class SimBasedPredicates:
         # case: single entity - single entity
         entity_a = cls.sim_instance_from_handle(sim, entity_handles_a[0])
         entity_b = cls.sim_instance_from_handle(sim, entity_handles_b[0])
-        is_next_to = obj_next_to(
-            sim=sim,
-            object_id_a=entity_a.object_id,
-            object_id_b=entity_b.object_id,
-            hor_l2_threshold=l2_threshold,
-            ao_link_map=ao_link_map,
-        )
+        
+        # Check if entities are agents (they don't have object_id)
+        # Agents have a 'sim_obj' attribute which is their articulated object
+        has_object_id_a = hasattr(entity_a, 'object_id')
+        has_object_id_b = hasattr(entity_b, 'object_id')
+        
+        if has_object_id_a and has_object_id_b:
+            # Both are regular objects, use existing logic
+            is_next_to = obj_next_to(
+                sim=sim,
+                object_id_a=entity_a.object_id,
+                object_id_b=entity_b.object_id,
+                hor_l2_threshold=l2_threshold,
+                ao_link_map=ao_link_map,
+            )
+        else:
+            # At least one is an agent, calculate distance manually
+            
+            # Get positions
+            if has_object_id_a:
+                pos_a = entity_a.translation
+            else:
+                # Agent - get base position
+                pos_a = entity_a.base_pos
+            
+            if has_object_id_b:
+                pos_b = entity_b.translation
+            else:
+                # Agent - get base position
+                pos_b = entity_b.base_pos
+            
+            # Calculate horizontal (x, z) distance
+            horizontal_dist = np.linalg.norm(np.array([pos_a[0], pos_a[2]]) - np.array([pos_b[0], pos_b[2]]))
+            is_next_to = horizontal_dist <= l2_threshold
+        
         info = {
             "entity_handles_a": entity_handles_a[0] if is_next_to else "",
             "entity_handles_b": entity_handles_b[0] if is_next_to else "",

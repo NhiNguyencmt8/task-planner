@@ -41,6 +41,7 @@ class CollaborationEpisode(RearrangeEpisode):
         is applied over propositions. Examples include temporal constraints and tied
         quantification. Defaults to empty.
     :property object_states: A map of object state unique identifier strings to object instance handles and their desired initial states.
+    :property robot_navigation_targets: A list of object handles that the robot should navigate to (optional)
     """
 
     instruction: str = ""
@@ -50,6 +51,7 @@ class CollaborationEpisode(RearrangeEpisode):
     ] = attr.ib(factory=list)
     evaluation_constraints: List[EvaluationConstraint] = attr.ib(factory=list)
     object_states: Dict[str, Dict[str, Any]] = attr.ib(factory=dict)
+    robot_navigation_targets: List[str] = attr.ib(factory=list)
 
 
 @registry.register_dataset(name="CollaborationDataset-v0")

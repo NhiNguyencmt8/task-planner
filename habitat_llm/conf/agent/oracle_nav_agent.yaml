@@ -2,7 +2,7 @@ defaults:
   - /llm: openai
 
   - /tools/motor_skills:
-    - oracle_nav
+    - reactive_nav
   - /tools/perception:
     - find_receptacle_tool
     - find_object_tool

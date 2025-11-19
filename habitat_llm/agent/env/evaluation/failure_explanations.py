@@ -20,12 +20,35 @@ from habitat_llm.sims.metadata_interface import MetadataInterface
 
 def handles_to_class_str(handles: List[str], mi: MetadataInterface) -> str:
     """Converts the list of handles to semantic classes joined by `or`"""
-    names = [sutils.object_shortname_from_handle(h) for h in handles]
-    cats = {f'"{" ".join(mi.get_object_category(n).split("_"))}"' for n in names}
-
-    if None in cats:
-        raise AssertionError(f"handles {handles} failed to map to categories.")
-    return " or ".join(cats)
+    cats = []
+    for h in handles:
+        # Check if this is an agent handle
+        if h.startswith("agent_"):
+            # Extract agent ID and create human-readable name
+            agent_id = h.split("_")[1]
+            if agent_id == "0":
+                cats.append('"robot"')
+            elif agent_id == "1":
+                cats.append('"human"')
+            else:
+                cats.append(f'"agent {agent_id}"')
+        else:
+            # Regular object - get category from metadata
+            name = sutils.object_shortname_from_handle(h)
+            category = mi.get_object_category(name)
+            if category is None:
+                raise AssertionError(f"handle {h} failed to map to category.")
+            cats.append(f'"{" ".join(category.split("_"))}"')
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_cats = []
+    for cat in cats:
+        if cat not in seen:
+            seen.add(cat)
+            unique_cats.append(cat)
+    
+    return " or ".join(unique_cats)
 
 
 def get_object_class(proposition, mi: MetadataInterface) -> str:
