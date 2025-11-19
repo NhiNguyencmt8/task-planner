@@ -566,7 +566,7 @@ class OracleNavSkill(SkillPolicy):
                 )
             
             # TODO HERE: Put our disturbance cost logic here
-
+            
             if not at_goal:
                 if dist_to_final_nav_targ < self.dist_thresh:
                     # TODO: this does not account for the sampled pose's final rotation

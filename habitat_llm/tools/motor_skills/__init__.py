@@ -14,6 +14,7 @@ from habitat_llm.tools.motor_skills.motor_skill_tool import MotorSkillTool
 from habitat_llm.tools.motor_skills.nav.nn_nav_skill import NavSkillPolicy
 from habitat_llm.tools.motor_skills.nav.oracle_nav_skill import OracleNavSkill
 from habitat_llm.tools.motor_skills.nav.reactive_nav_skill import ReactiveNavSkill
+from habitat_llm.tools.motor_skills.nav.human_aware_nav_skill import HumanAwareNavSkill
 
 # Pick
 from habitat_llm.tools.motor_skills.pick.nn_pick_skill import PickSkillPolicy

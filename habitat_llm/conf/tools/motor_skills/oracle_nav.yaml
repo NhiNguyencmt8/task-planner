@@ -1,22 +1,44 @@
-oracle_nav:
-  _target_                   : 'habitat_llm.tools.motor_skills.MotorSkillTool'
-  _recursive_                : False
+human_aware_nav:
+  _target_: 'habitat_llm.tools.motor_skills.MotorSkillTool'
+  _recursive_: false
 
-  skill_config                :
-    skill                      :
-      _target_                 : "habitat_llm.tools.motor_skills.OracleNavSkill"
-      _partial_                : True
+  skill_config:
+    skill:
+      _target_: "habitat_llm.tools.motor_skills.HumanAwareNavSkill"
+      _partial_: true
 
-    name                       : 'Navigate'
-    description                : 'Used for navigating to an entity. You must provide the name of the entity you want to navigate to. Example (Navigate[counter_22])'
-    max_skill_steps            : 600
-    force_end_on_timeout       : True
+    name: "HumanAwareNavigate"
+    description: "Navigate to a target entity while predicting human motion and avoiding human corridors."
 
-    dist_thresh                : 0.2
-    turn_thresh                : 0.45
-    forward_velocity           : 10.0
-    turn_velocity              : 10.0
-    sim_freq                   : 120 # Hz
-    enable_backing_up          : False
-    # Disable exploration
-    enable_exploration         : False
+    # === OracleNav parameters that we inherit ===
+    max_skill_steps: 600
+    force_end_on_timeout: True
+    dist_thresh: 0.2
+    turn_thresh: 0.45
+    forward_velocity: 10.0
+    turn_velocity: 10.0
+    sim_freq: 120
+    enable_backing_up: False
+    enable_exploration: False
+
+    # === NEW parameters for HumanAwareNavSkill ===
+    # Human detection / observation
+    fx: 256.0
+    fy: 256.0
+    cx: 128.0
+    cy: 128.0
+    min_human_pixels: 80
+
+    # Belief tracking
+    corridor_horizon: 10
+    base_corridor_radius: 0.6
+    uncertainty_scale: 1.0
+    max_invisible_steps: 150
+    max_uncertainty_trace: 4.0
+
+    # Safety filter
+    safe_margin: 0.25
+
+    # Noise for belief propagation
+    # (this will be used inside the class where Q = diag(process_noise))
+    process_noise: 0.05
